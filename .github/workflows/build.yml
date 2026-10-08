@@ -7,7 +7,6 @@ on:
 
 jobs:
   build:
-    # پین‌کردن نسخه تا با تغییر ubuntu-latest به اوبونتو ۲۶ بیلد خراب نشود
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -17,12 +16,24 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # Gradle 8.9 را مستقیم نصب می‌کند، پس به gradlew نیازی نیست
       - uses: gradle/actions/setup-gradle@v5
+        with:
+          gradle-version: '8.9'
+
+      # پوشه‌ای را پیدا می‌کند که settings.gradle داخلش است (ریشه یا زیرپوشه)
+      - name: Find project folder
+        id: proj
+        run: |
+          f=$(find . -name settings.gradle -not -path '*/node_modules/*' | head -n1)
+          echo "dir=$(dirname "$f")" >> "$GITHUB_OUTPUT"
+          echo "Project folder: $(dirname "$f")"
 
       - name: Build debug APK
-        run: ./gradlew assembleDebug
+        working-directory: ${{ steps.proj.outputs.dir }}
+        run: gradle assembleDebug --stacktrace
 
       - uses: actions/upload-artifact@v6
         with:
           name: app-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: '**/app/build/outputs/apk/debug/app-debug.apk'
