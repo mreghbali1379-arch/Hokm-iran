@@ -2,38 +2,47 @@ name: Build APK
 
 on:
   push:
-  pull_request:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v5
+      - name: Unzip project
+        run: |
+          mkdir -p src
+          unzip -q "$(ls *.zip | head -1)" -d src
+          DIR=$(dirname "$(find src -name settings.gradle | head -1)")
+          echo "PROJECT_DIR=$DIR" >> "$GITHUB_ENV"
+          echo "Project found in: $DIR"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      # Gradle 8.9 را مستقیم نصب می‌کند، پس به gradlew نیازی نیست
-      - uses: gradle/actions/setup-gradle@v5
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      # پوشه‌ای را پیدا می‌کند که settings.gradle داخلش است (ریشه یا زیرپوشه)
-      - name: Find project folder
-        id: proj
-        run: |
-          f=$(find . -name settings.gradle -not -path '*/node_modules/*' | head -n1)
-          echo "dir=$(dirname "$f")" >> "$GITHUB_OUTPUT"
-          echo "Project folder: $(dirname "$f")"
+      - name: Unit tests
+        continue-on-error: true
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: gradle testDebugUnitTest --no-daemon
 
       - name: Build debug APK
-        working-directory: ${{ steps.proj.outputs.dir }}
-        run: gradle assembleDebug --stacktrace
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: gradle assembleDebug --no-daemon
 
-      - uses: actions/upload-artifact@v6
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
-          name: app-debug
-          path: '**/app/build/outputs/apk/debug/app-debug.apk'
+          name: hokm-debug-apk
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
